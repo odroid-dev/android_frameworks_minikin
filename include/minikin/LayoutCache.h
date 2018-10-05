@@ -25,7 +25,7 @@
 #include <utils/LruCache.h>
 
 namespace minikin {
-
+const uint32_t LENGTH_LIMIT_CACHE = 128;
 // Layout cache datatypes
 class LayoutCacheKey {
 public:
@@ -138,13 +138,12 @@ public:
     void getOrCreate(const U16StringPiece& text, const Range& range, const MinikinPaint& paint,
                      bool dir, StartHyphenEdit startHyphen, EndHyphenEdit endHyphen, F& f) {
         LayoutCacheKey key(text, range, paint, dir, startHyphen, endHyphen);
-        if (paint.skipCache()) {
+        if (paint.skipCache() || range.getLength() >= LENGTH_LIMIT_CACHE) {
             Layout layoutForWord;
             key.doLayout(&layoutForWord, paint);
             f(layoutForWord);
             return;
         }
-
         mRequestCount++;
         {
             std::lock_guard<std::mutex> lock(mMutex);
@@ -183,6 +182,11 @@ public:
 protected:
     LayoutCache(uint32_t maxEntries) : mCache(maxEntries), mRequestCount(0), mCacheHitCount(0) {
         mCache.setOnEntryRemovedListener(this);
+    }
+
+    uint32_t getCacheSize() {
+        std::lock_guard<std::mutex> lock(mMutex);
+        return mCache.size();
     }
 
 private:
